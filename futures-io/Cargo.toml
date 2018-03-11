@@ -11,7 +11,7 @@ The `AsyncRead` and `AsyncWrite` traits for the futures-rs library.
 """
 
 [features]
-std = ["futures-core/std", "futures/std"]
+std = ["futures-core/std"]
 default = ["std"]
 
 [dependencies]

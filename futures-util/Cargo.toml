@@ -13,12 +13,9 @@ Common utilities and extension traits for the futures-rs library.
 [features]
 std = [
   "either/use_std",
-  "futures-channel/std",
   "futures-core/std",
-  "futures-executor/std",
   "futures-io/std",
   "futures-sink/std",
-  "futures/std",
 ]
 default = ["std", "futures-core/either"]
 

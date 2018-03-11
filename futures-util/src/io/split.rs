@@ -3,7 +3,7 @@ use std::io;
 use {Async, Poll, task};
 use lock::BiLock;
 
-use futures_io::{AsyncRead, AsyncWrite, Error, IoVec};
+use futures_io::{AsyncRead, AsyncWrite, Error, IoVec, IoVecMut};
 
 /// The readable half of an object returned from `AsyncRead::split`.
 #[derive(Debug)]
@@ -38,7 +38,7 @@ impl<T: AsyncRead> AsyncRead for ReadHalf<T> {
         lock_and_then(&self.handle, cx, |l, cx| l.poll_read(cx, buf))
     }
 
-    fn poll_vectored_read(&mut self, cx: &mut task::Context, vec: &mut [&mut IoVec])
+    fn poll_vectored_read(&mut self, cx: &mut task::Context, vec: &mut [&mut IoVecMut])
         -> Poll<usize, io::Error>
     {
         lock_and_then(&self.handle, cx, |l, cx| l.poll_vectored_read(cx, vec))
