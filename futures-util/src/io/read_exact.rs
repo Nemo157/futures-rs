@@ -1,9 +1,8 @@
-use std::io;
-use std::mem;
+use core::mem;
 
 use {Poll, Future, task};
 
-use io::AsyncRead;
+use futures_io::CoreAsyncRead;
 
 /// A future which can be used to easily read exactly enough bytes to fill
 /// a buffer.
@@ -27,7 +26,7 @@ enum State<A, T> {
 }
 
 pub fn read_exact<A, T>(a: A, buf: T) -> ReadExact<A, T>
-    where A: AsyncRead,
+    where A: CoreAsyncRead,
           T: AsMut<[u8]>,
 {
     ReadExact {
@@ -39,26 +38,22 @@ pub fn read_exact<A, T>(a: A, buf: T) -> ReadExact<A, T>
     }
 }
 
-fn eof() -> io::Error {
-    io::Error::new(io::ErrorKind::UnexpectedEof, "early eof")
-}
-
 impl<A, T> Future for ReadExact<A, T>
-    where A: AsyncRead,
+    where A: CoreAsyncRead,
           T: AsMut<[u8]>,
 {
     type Item = (A, T);
-    type Error = io::Error;
+    type Error = A::Error;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(A, T), io::Error> {
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<(A, T), Self::Error> {
         match self.state {
             State::Reading { ref mut a, ref mut buf, ref mut pos } => {
                 let buf = buf.as_mut();
                 while *pos < buf.len() {
-                    let n = try_ready!(a.poll_read(cx, &mut buf[*pos..]));
+                    let n = try_ready!(a.poll_read_core(cx, &mut buf[*pos..]));
                     *pos += n;
                     if n == 0 {
-                        return Err(eof())
+                        return Err(A::Error::eof("early eof"))
                     }
                 }
             }

@@ -1,8 +1,6 @@
-use std::io;
-
 use {Poll, Future, Async, task};
 
-use futures_io::AsyncWrite;
+use futures_io::CoreAsyncWrite;
 
 /// A future used to fully flush an I/O object.
 ///
@@ -17,7 +15,7 @@ pub struct Flush<A> {
 }
 
 pub fn flush<A>(a: A) -> Flush<A>
-    where A: AsyncWrite,
+    where A: CoreAsyncWrite,
 {
     Flush {
         a: Some(a),
@@ -25,13 +23,13 @@ pub fn flush<A>(a: A) -> Flush<A>
 }
 
 impl<A> Future for Flush<A>
-    where A: AsyncWrite,
+    where A: CoreAsyncWrite,
 {
     type Item = A;
-    type Error = io::Error;
+    type Error = A::Error;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<A, io::Error> {
-        try_ready!(self.a.as_mut().unwrap().poll_flush(cx));
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<A, Self::Error> {
+        try_ready!(self.a.as_mut().unwrap().poll_flush_core(cx));
         Ok(Async::Ready(self.a.take().unwrap()))
     }
 }

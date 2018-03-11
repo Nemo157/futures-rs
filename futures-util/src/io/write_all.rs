@@ -1,9 +1,8 @@
-use std::io;
-use std::mem;
+use core::mem;
 
 use {Poll, Future, task};
 
-use futures_io::AsyncWrite;
+use futures_io::CoreAsyncWrite;
 
 /// A future used to write the entire contents of some data to a stream.
 ///
@@ -26,7 +25,7 @@ enum State<A, T> {
 }
 
 pub fn write_all<A, T>(a: A, buf: T) -> WriteAll<A, T>
-    where A: AsyncWrite,
+    where A: CoreAsyncWrite,
           T: AsRef<[u8]>,
 {
     WriteAll {
@@ -38,26 +37,22 @@ pub fn write_all<A, T>(a: A, buf: T) -> WriteAll<A, T>
     }
 }
 
-fn zero_write() -> io::Error {
-    io::Error::new(io::ErrorKind::WriteZero, "zero-length write")
-}
-
 impl<A, T> Future for WriteAll<A, T>
-    where A: AsyncWrite,
+    where A: CoreAsyncWrite,
           T: AsRef<[u8]>,
 {
     type Item = (A, T);
-    type Error = io::Error;
+    type Error = A::Error;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(A, T), io::Error> {
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<(A, T), Self::Error> {
         match self.state {
             State::Writing { ref mut a, ref buf, ref mut pos } => {
                 let buf = buf.as_ref();
                 while *pos < buf.len() {
-                    let n = try_ready!(a.poll_write(cx, &buf[*pos..]));
+                    let n = try_ready!(a.poll_write_core(cx, &buf[*pos..]));
                     *pos += n;
                     if n == 0 {
-                        return Err(zero_write())
+                        return Err(A::Error::zero_write("zero-length write"))
                     }
                 }
             }

@@ -11,7 +11,6 @@ extern crate futures_io;
 extern crate futures_sink;
 extern crate either;
 
-#[cfg(feature = "std")]
 use futures_core::{Async, Future, Poll, task};
 
 macro_rules! if_std {
@@ -52,8 +51,8 @@ pub mod lock;
 pub mod future;
 pub use future::FutureExt;
 
-#[cfg(feature = "std")]
 pub mod io;
+pub use io::{CoreAsyncReadExt, CoreAsyncWriteExt};
 #[cfg(feature = "std")]
 pub use io::{AsyncReadExt, AsyncWriteExt};
 
@@ -67,6 +66,7 @@ pub mod prelude {
     //! Prelude containing the extension traits, which add functionality to
     //! existing asynchronous types.
     pub use {FutureExt, StreamExt, SinkExt};
+    pub use {CoreAsyncReadExt, CoreAsyncWriteExt};
     #[cfg(feature = "std")]
     pub use {AsyncReadExt, AsyncWriteExt};
 }

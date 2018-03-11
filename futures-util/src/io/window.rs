@@ -1,4 +1,4 @@
-use std::ops;
+use core::ops;
 
 /// A owned window around an underlying buffer.
 ///

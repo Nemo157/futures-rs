@@ -37,3 +37,13 @@ impl Stream for Never {
         match *self {}
     }
 }
+
+if_std! {
+    use std::io;
+
+    impl Into<io::Error> for Never {
+        fn into(self) -> io::Error {
+            match self {}
+        }
+    }
+}

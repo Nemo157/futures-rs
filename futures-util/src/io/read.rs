@@ -1,9 +1,8 @@
-use std::io;
-use std::mem;
+use core::mem;
 
 use {Future, Poll, task};
 
-use io::AsyncRead;
+use futures_io::CoreAsyncRead;
 
 #[derive(Debug)]
 enum State<R, T> {
@@ -15,7 +14,7 @@ enum State<R, T> {
 }
 
 pub fn read<R, T>(rd: R, buf: T) -> Read<R, T>
-    where R: AsyncRead,
+    where R: CoreAsyncRead,
           T: AsMut<[u8]>
 {
     Read { state: State::Pending { rd, buf } }
@@ -31,16 +30,16 @@ pub struct Read<R, T> {
 }
 
 impl<R, T> Future for Read<R, T>
-    where R: AsyncRead,
+    where R: CoreAsyncRead,
           T: AsMut<[u8]>
 {
     type Item = (R, T, usize);
-    type Error = io::Error;
+    type Error = R::Error;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(R, T, usize), io::Error> {
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<(R, T, usize), Self::Error> {
         let nread = match self.state {
             State::Pending { ref mut rd, ref mut buf } =>
-                try_ready!(rd.poll_read(cx, &mut buf.as_mut()[..])),
+                try_ready!(rd.poll_read_core(cx, &mut buf.as_mut()[..])),
             State::Empty => panic!("poll a Read after it's done"),
         };
 

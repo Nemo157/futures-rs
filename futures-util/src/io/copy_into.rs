@@ -1,9 +1,6 @@
-use std::io;
-use std::boxed::Box;
-
 use {Future, Poll, task};
 
-use futures_io::{AsyncRead, AsyncWrite};
+use futures_io::{CoreAsyncRead, CoreAsyncWrite};
 
 /// A future which will copy all data from a reader into a writer.
 ///
@@ -12,17 +9,17 @@ use futures_io::{AsyncRead, AsyncWrite};
 ///
 /// [`copy_into`]: fn.copy_into.html
 #[derive(Debug)]
-pub struct CopyInto<R, W> {
+pub struct CopyInto<R, W, B> {
     reader: Option<R>,
     read_done: bool,
     writer: Option<W>,
     pos: usize,
     cap: usize,
     amt: u64,
-    buf: Box<[u8]>,
+    buf: Option<B>,
 }
 
-pub fn copy_into<R, W>(reader: R, writer: W) -> CopyInto<R, W> {
+pub fn copy_into<R, W, B>(reader: R, writer: W, buf: B) -> CopyInto<R, W, B> {
     CopyInto {
         reader: Some(reader),
         read_done: false,
@@ -30,24 +27,26 @@ pub fn copy_into<R, W>(reader: R, writer: W) -> CopyInto<R, W> {
         amt: 0,
         pos: 0,
         cap: 0,
-        buf: Box::new([0; 2048]),
+        buf: Some(buf),
     }
 }
 
-impl<R, W> Future for CopyInto<R, W>
-    where R: AsyncRead,
-          W: AsyncWrite,
+impl<R, W, B> Future for CopyInto<R, W, B>
+    where R: CoreAsyncRead,
+          W: CoreAsyncWrite<Error = R::Error>,
+          B: AsRef<[u8]> + AsMut<[u8]>,
 {
-    type Item = (u64, R, W);
-    type Error = io::Error;
+    type Item = (u64, R, W, B);
+    type Error = R::Error;
 
-    fn poll(&mut self, cx: &mut task::Context) -> Poll<(u64, R, W), io::Error> {
+    fn poll(&mut self, cx: &mut task::Context) -> Poll<(u64, R, W, B), Self::Error> {
         loop {
             // If our buffer is empty, then we need to read some data to
             // continue.
             if self.pos == self.cap && !self.read_done {
                 let reader = self.reader.as_mut().unwrap();
-                let n = try_ready!(reader.poll_read(cx, &mut self.buf));
+                let buf = self.buf.as_mut().unwrap().as_mut();
+                let n = try_ready!(reader.poll_read_core(cx, buf));
                 if n == 0 {
                     self.read_done = true;
                 } else {
@@ -59,10 +58,10 @@ impl<R, W> Future for CopyInto<R, W>
             // If our buffer has some data, let's write it out!
             while self.pos < self.cap {
                 let writer = self.writer.as_mut().unwrap();
-                let i = try_ready!(writer.poll_write(cx, &self.buf[self.pos..self.cap]));
+                let buf = self.buf.as_ref().unwrap().as_ref();
+                let i = try_ready!(writer.poll_write_core(cx, &buf[self.pos..self.cap]));
                 if i == 0 {
-                    return Err(io::Error::new(io::ErrorKind::WriteZero,
-                                              "write zero byte into writer"));
+                    return Err(Self::Error::write_zero("write zero byte into writer"));
                 } else {
                     self.pos += i;
                     self.amt += i as u64;
@@ -73,10 +72,11 @@ impl<R, W> Future for CopyInto<R, W>
             // data and finish the transfer.
             // done with the entire transfer.
             if self.pos == self.cap && self.read_done {
-                try_ready!(self.writer.as_mut().unwrap().poll_flush(cx));
+                try_ready!(self.writer.as_mut().unwrap().poll_flush_core(cx));
                 let reader = self.reader.take().unwrap();
                 let writer = self.writer.take().unwrap();
-                return Ok((self.amt, reader, writer).into())
+                let buf = self.buf.take().unwrap();
+                return Ok((self.amt, reader, writer, buf).into())
             }
         }
     }
