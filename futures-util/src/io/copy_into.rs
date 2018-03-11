@@ -46,7 +46,7 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             if self.pos == self.cap && !self.read_done {
                 let reader = self.reader.as_mut().unwrap();
                 let buf = self.buf.as_mut().unwrap().as_mut();
-                let n = try_ready!(reader.poll_read_core(cx, buf));
+                let n = try_ready!(reader.poll_read(cx, buf));
                 if n == 0 {
                     self.read_done = true;
                 } else {
@@ -59,7 +59,7 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             while self.pos < self.cap {
                 let writer = self.writer.as_mut().unwrap();
                 let buf = self.buf.as_ref().unwrap().as_ref();
-                let i = try_ready!(writer.poll_write_core(cx, &buf[self.pos..self.cap]));
+                let i = try_ready!(writer.poll_write(cx, &buf[self.pos..self.cap]));
                 if i == 0 {
                     return Err(Self::Error::write_zero("write zero byte into writer"));
                 } else {
@@ -72,7 +72,7 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             // data and finish the transfer.
             // done with the entire transfer.
             if self.pos == self.cap && self.read_done {
-                try_ready!(self.writer.as_mut().unwrap().poll_flush_core(cx));
+                try_ready!(self.writer.as_mut().unwrap().poll_flush(cx));
                 let reader = self.reader.take().unwrap();
                 let writer = self.writer.take().unwrap();
                 let buf = self.buf.take().unwrap();

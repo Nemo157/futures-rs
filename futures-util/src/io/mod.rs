@@ -42,7 +42,7 @@ pub trait CoreAsyncReadExt: CoreAsyncRead {
     /// On success the number of bytes is returned and this `AsyncRead` and `writer` are
     /// consumed. On error the error is returned and the I/O objects are consumed as
     /// well.
-    fn copy_into_core<W, B>(self, writer: W, buf: B) -> CopyInto<Self, W, B>
+    fn copy_into_with_buffer<W, B>(self, writer: W, buf: B) -> CopyInto<Self, W, B>
         where W: CoreAsyncWrite<Error = Self::Error>,
               B: AsRef<[u8]> + AsMut<[u8]>,
               Self: Sized,
@@ -158,7 +158,7 @@ if_std! {
             where W: CoreAsyncWrite<Error = Self::Error>,
                   Self: Sized,
         {
-            self.copy_into_core(writer, Box::new([0; 2048]))
+            self.copy_into_with_buffer(writer, Box::new([0; 2048]))
         }
 
         /// Creates a future which will read all the bytes from this `AsyncRead`.

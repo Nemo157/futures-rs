@@ -49,7 +49,7 @@ impl<A, T> Future for WriteAll<A, T>
             State::Writing { ref mut a, ref buf, ref mut pos } => {
                 let buf = buf.as_ref();
                 while *pos < buf.len() {
-                    let n = try_ready!(a.poll_write_core(cx, &buf[*pos..]));
+                    let n = try_ready!(a.poll_write(cx, &buf[*pos..]));
                     *pos += n;
                     if n == 0 {
                         return Err(A::Error::write_zero("zero-length write"))

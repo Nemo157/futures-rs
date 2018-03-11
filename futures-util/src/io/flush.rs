@@ -29,7 +29,7 @@ impl<A> Future for Flush<A>
     type Error = A::Error;
 
     fn poll(&mut self, cx: &mut task::Context) -> Poll<A, Self::Error> {
-        try_ready!(self.a.as_mut().unwrap().poll_flush_core(cx));
+        try_ready!(self.a.as_mut().unwrap().poll_flush(cx));
         Ok(Async::Ready(self.a.take().unwrap()))
     }
 }

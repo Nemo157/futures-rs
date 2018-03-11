@@ -1,5 +1,5 @@
 use futures_core::{Async, Poll, task};
-use futures_io::{AsyncRead, AsyncWrite};
+use futures_io::{CoreAsyncRead, CoreAsyncWrite};
 use std::{fmt, io};
 use std::string::String;
 use std::vec::Vec;
@@ -54,7 +54,9 @@ impl<T> io::Write for AllowStdIo<T> where T: io::Write {
     }
 }
 
-impl<T> AsyncWrite for AllowStdIo<T> where T: io::Write {
+impl<T> CoreAsyncWrite for AllowStdIo<T> where T: io::Write {
+    type Error = io::Error;
+
     fn poll_write(&mut self, _: &mut task::Context, buf: &[u8])
         -> Poll<usize, io::Error>
     {
@@ -87,7 +89,9 @@ impl<T> io::Read for AllowStdIo<T> where T: io::Read {
     }
 }
 
-impl<T> AsyncRead for AllowStdIo<T> where T: io::Read {
+impl<T> CoreAsyncRead for AllowStdIo<T> where T: io::Read {
+    type Error = io::Error;
+
     fn poll_read(&mut self, _: &mut task::Context, buf: &mut [u8])
         -> Poll<usize, io::Error>
     {

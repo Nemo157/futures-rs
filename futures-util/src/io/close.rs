@@ -30,7 +30,7 @@ impl<A> Future for Close<A>
     type Error = A::Error;
 
     fn poll(&mut self, cx: &mut task::Context) -> Poll<A, Self::Error> {
-        try_ready!(self.a.as_mut().unwrap().poll_close_core(cx));
+        try_ready!(self.a.as_mut().unwrap().poll_close(cx));
         Ok(Async::Ready(self.a.take().unwrap()))
     }
 }
