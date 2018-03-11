@@ -11,12 +11,13 @@ The `AsyncRead` and `AsyncWrite` traits for the futures-rs library.
 """
 
 [features]
-std = ["futures-core/std", "iovec"]
+std = ["futures-core/std", "futures/std"]
 default = ["std"]
 
 [dependencies]
 futures-core = { path = "../futures-core", version = "0.2.0-alpha", default-features = false }
-iovec = { version = "0.1", optional = true }
+iovec = { git = "https://github.com/Nemo157/iovec", branch = "no_std" }
 
 [dev-dependencies]
-futures = { path = "../futures", version = "0.2.0-alpha" }
+# https://github.com/rust-lang/cargo/issues/4866
+futures = { path = "../futures", version = "0.2.0-alpha", default-features = false }
