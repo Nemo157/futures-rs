@@ -59,7 +59,7 @@ pub trait AsyncReadExt: CoreAsyncRead {
     /// well.
     #[cfg(feature = "std")]
     fn copy_into<W>(self, writer: W) -> CopyInto<Self, W, Box<[u8]>>
-        where W: CoreAsyncWrite<Error = Self::Error>,
+        where W: CoreAsyncWrite,
               Self: Sized,
     {
         self.copy_into_with_buffer(writer, Box::new([0; 2048]))
@@ -76,7 +76,7 @@ pub trait AsyncReadExt: CoreAsyncRead {
     /// consumed. On error the error is returned and the I/O objects are consumed as
     /// well.
     fn copy_into_with_buffer<W, B>(self, writer: W, buf: B) -> CopyInto<Self, W, B>
-        where W: CoreAsyncWrite<Error = Self::Error>,
+        where W: CoreAsyncWrite,
               B: AsRef<[u8]> + AsMut<[u8]>,
               Self: Sized,
     {

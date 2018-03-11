@@ -1,4 +1,4 @@
-use {Future, Poll, task};
+use {Future, Poll, task, future::Either};
 
 use futures_io::{CoreAsyncRead, CoreAsyncWrite, CoreIoError};
 
@@ -33,11 +33,11 @@ pub fn copy_into<R, W, B>(reader: R, writer: W, buf: B) -> CopyInto<R, W, B> {
 
 impl<R, W, B> Future for CopyInto<R, W, B>
     where R: CoreAsyncRead,
-          W: CoreAsyncWrite<Error = R::Error>,
+          W: CoreAsyncWrite,
           B: AsRef<[u8]> + AsMut<[u8]>,
 {
     type Item = (u64, R, W, B);
-    type Error = R::Error;
+    type Error = Either<R::Error, W::Error>;
 
     fn poll(&mut self, cx: &mut task::Context) -> Poll<(u64, R, W, B), Self::Error> {
         loop {
@@ -46,7 +46,7 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             if self.pos == self.cap && !self.read_done {
                 let reader = self.reader.as_mut().unwrap();
                 let buf = self.buf.as_mut().unwrap().as_mut();
-                let n = try_ready!(reader.poll_read(cx, buf));
+                let n = try_ready!(reader.poll_read(cx, buf).map_err(Either::Left));
                 if n == 0 {
                     self.read_done = true;
                 } else {
@@ -59,9 +59,9 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             while self.pos < self.cap {
                 let writer = self.writer.as_mut().unwrap();
                 let buf = self.buf.as_ref().unwrap().as_ref();
-                let i = try_ready!(writer.poll_write(cx, &buf[self.pos..self.cap]));
+                let i = try_ready!(writer.poll_write(cx, &buf[self.pos..self.cap]).map_err(Either::Right));
                 if i == 0 {
-                    return Err(Self::Error::write_zero("write zero byte into writer"));
+                    return Err(Either::Right(W::Error::write_zero("write zero byte into writer")));
                 } else {
                     self.pos += i;
                     self.amt += i as u64;
@@ -72,7 +72,7 @@ impl<R, W, B> Future for CopyInto<R, W, B>
             // data and finish the transfer.
             // done with the entire transfer.
             if self.pos == self.cap && self.read_done {
-                try_ready!(self.writer.as_mut().unwrap().poll_flush(cx));
+                try_ready!(self.writer.as_mut().unwrap().poll_flush(cx).map_err(Either::Right));
                 let reader = self.reader.take().unwrap();
                 let writer = self.writer.take().unwrap();
                 let buf = self.buf.take().unwrap();
