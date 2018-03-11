@@ -197,7 +197,6 @@ pub mod future {
     };
 }
 
-#[cfg(feature = "std")]
 pub mod io {
     //! Asynchronous I/O.
     //!
@@ -215,11 +214,20 @@ pub mod io {
     //! including ways to work with them using futures, streams and sinks.
 
     pub use futures_io::{
-        Error, Initializer, IoVec, ErrorKind, AsyncRead, AsyncWrite, Result
+        Initializer, IoVec, IoVecMut, CoreIoError, CoreAsyncRead, CoreAsyncWrite,
     };
     pub use futures_util::io::{
-        AsyncReadExt, AsyncWriteExt, AllowStdIo, Close, CopyInto, Flush,
-        Read, ReadExact, ReadHalf, ReadToEnd, Window, WriteAll, WriteHalf,
+        CoreAsyncReadExt, CoreAsyncWriteExt, Close, CopyInto, Flush,
+        Read, ReadExact, Window, WriteAll,
+    };
+
+    #[cfg(feature = "std")]
+    pub use futures_io::{
+        Error, ErrorKind, AsyncRead, AsyncWrite, Result,
+    };
+    #[cfg(feature = "std")]
+    pub use futures_util::io::{
+        AsyncReadExt, AsyncWriteExt, AllowStdIo, ReadHalf, ReadToEnd, WriteHalf,
     };
 }
 
