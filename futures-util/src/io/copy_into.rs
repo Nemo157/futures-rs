@@ -1,6 +1,6 @@
 use {Future, Poll, task};
 
-use futures_io::{CoreAsyncRead, CoreAsyncWrite};
+use futures_io::{CoreAsyncRead, CoreAsyncWrite, CoreIoError};
 
 /// A future which will copy all data from a reader into a writer.
 ///

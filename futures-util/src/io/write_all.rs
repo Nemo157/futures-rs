@@ -2,7 +2,7 @@ use core::mem;
 
 use {Poll, Future, task};
 
-use futures_io::CoreAsyncWrite;
+use futures_io::{CoreAsyncWrite, CoreIoError};
 
 /// A future used to write the entire contents of some data to a stream.
 ///
@@ -52,7 +52,7 @@ impl<A, T> Future for WriteAll<A, T>
                     let n = try_ready!(a.poll_write_core(cx, &buf[*pos..]));
                     *pos += n;
                     if n == 0 {
-                        return Err(A::Error::zero_write("zero-length write"))
+                        return Err(A::Error::write_zero("zero-length write"))
                     }
                 }
             }

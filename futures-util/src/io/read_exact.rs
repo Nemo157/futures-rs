@@ -2,7 +2,7 @@ use core::mem;
 
 use {Poll, Future, task};
 
-use futures_io::CoreAsyncRead;
+use futures_io::{CoreAsyncRead, CoreIoError};
 
 /// A future which can be used to easily read exactly enough bytes to fill
 /// a buffer.
@@ -53,7 +53,7 @@ impl<A, T> Future for ReadExact<A, T>
                     let n = try_ready!(a.poll_read_core(cx, &mut buf[*pos..]));
                     *pos += n;
                     if n == 0 {
-                        return Err(A::Error::eof("early eof"))
+                        return Err(A::Error::unexpected_eof("early eof"))
                     }
                 }
             }

@@ -23,7 +23,7 @@ extern crate iovec;
 use core::cmp;
 use core::ptr;
 
-use futures_core::{Async, Poll, never::Never, task};
+use futures_core::{Async, Poll, task};
 
 // Re-export IoVec for convenience
 pub use iovec::{IoVec, IoVecMut};
@@ -68,6 +68,57 @@ impl Initializer {
     }
 }
 
+/// The minimum set of variants an IO error type must provide to allow for IO
+/// adaptors to be built on top of it.
+pub trait CoreIoError: Sized {
+    /// An operation could not be completed because a call to `poll_write_core`
+    /// returned `Ok(Async::Ready(0))`.
+    ///
+    /// This typically means that an operation could only succeed if it wrote a
+    /// particular number of bytes but only a smaller number of bytes could be
+    /// written.
+    fn write_zero(msg: &'static str) -> Self;
+
+    /// An operation could not be completed because an "end of file" was
+    /// reached prematurely.
+    ///
+    /// This typically means that an operation could only succeed if it read a
+    /// particular number of bytes but only a smaller number of bytes could be
+    /// read.
+    fn unexpected_eof(msg: &'static str) -> Self;
+}
+
+#[derive(Debug, Copy, Clone)]
+/// A type providing the minimum set of variants for an IO error, to support
+/// types that are otherwise infallible
+pub enum MinimalIoError {
+    /// An operation could not be completed because a call to `poll_write_core`
+    /// returned `Ok(Async::Ready(0))`.
+    ///
+    /// This typically means that an operation could only succeed if it wrote a
+    /// particular number of bytes but only a smaller number of bytes could be
+    /// written.
+    WriteZero(&'static str),
+
+    /// An operation could not be completed because an "end of file" was
+    /// reached prematurely.
+    ///
+    /// This typically means that an operation could only succeed if it read a
+    /// particular number of bytes but only a smaller number of bytes could be
+    /// read.
+    UnexpectedEof(&'static str),
+}
+
+impl CoreIoError for MinimalIoError {
+    fn write_zero(msg: &'static str) -> Self {
+        MinimalIoError::WriteZero(msg)
+    }
+
+    fn unexpected_eof(msg: &'static str) -> Self {
+        MinimalIoError::UnexpectedEof(msg)
+    }
+}
+
 /// `std`-less trait to read bytes asynchronously.
 ///
 /// This trait is analogous to the `std::io::Read` trait, but integrates
@@ -77,7 +128,7 @@ impl Initializer {
 /// the calling thread.
 pub trait CoreAsyncRead {
     /// TODO
-    type Error;
+    type Error: CoreIoError;
 
     /// Determines if this `CoreAsyncRead`er can work with buffers of
     /// uninitialized memory.
@@ -143,7 +194,7 @@ pub trait CoreAsyncRead {
 /// the calling thread.
 pub trait CoreAsyncWrite {
     /// TODO
-    type Error;
+    type Error: CoreIoError;
 
     /// Attempt to write bytes from `buf` into the object.
     ///
@@ -226,7 +277,7 @@ impl<'a, T: ?Sized + CoreAsyncRead> CoreAsyncRead for &'a mut T {
 }
 
 impl<'a> CoreAsyncRead for &'a [u8] {
-    type Error = Never;
+    type Error = MinimalIoError;
 
     unsafe fn initializer_core(&self) -> Initializer {
         Initializer::nop()
@@ -551,5 +602,15 @@ if_std! {
 
     impl AsyncWrite for StdIo::Sink {
         delegate_async_write_to_stdio!();
+    }
+
+    impl CoreIoError for Error {
+        fn write_zero(msg: &'static str) -> Self {
+            Error::new(ErrorKind::WriteZero, msg)
+        }
+
+        fn unexpected_eof(msg: &'static str) -> Self {
+            Error::new(ErrorKind::UnexpectedEof, msg)
+        }
     }
 }

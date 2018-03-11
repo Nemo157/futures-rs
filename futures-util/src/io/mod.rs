@@ -67,6 +67,24 @@ impl<T: CoreAsyncRead + ?Sized> CoreAsyncReadExt for T {}
 
 /// An extension trait which adds utility methods to `CoreAsyncWrite` types.
 pub trait CoreAsyncWriteExt: CoreAsyncWrite {
+    /// Creates a future which copies all the bytes from one object to another.
+    ///
+    /// The returned future will copy all the bytes read from this `AsyncRead` into the
+    /// `writer` specified. This future will only complete once the `reader` has hit
+    /// EOF and all bytes have been written to and flushed from the `writer`
+    /// provided.
+    ///
+    /// On success the number of bytes is returned and this `AsyncRead` and `writer` are
+    /// consumed. On error the error is returned and the I/O objects are consumed as
+    /// well.
+    fn copy_into_core<W, B>(self, writer: W, buf: B) -> CopyInto<Self, W, B>
+        where W: CoreAsyncWrite<Error = Self::Error>,
+              B: AsRef<[u8]> + AsMut<[u8]>,
+              Self: Sized,
+    {
+        copy_into::copy_into(self, writer, buf)
+    }
+
     /// Creates a future which will entirely flush this `CoreAsyncWrite` and then return `self`.
     ///
     /// This function will consume `self` if an error occurs.
@@ -136,10 +154,10 @@ if_std! {
         /// consumed. On error the error is returned and the I/O objects are consumed as
         /// well.
         fn copy_into<W>(self, writer: W) -> CopyInto<Self, W, Box<[u8]>>
-            where W: AsyncWriteCore<Error = Self::Error>,
+            where W: CoreAsyncWrite<Error = Self::Error>,
                   Self: Sized,
         {
-            copy_into::copy_into(self, writer, Box::new([0; 2048]))
+            self.copy_into_core(writer, Box::new([0; 2048]))
         }
 
         /// Creates a future which will read all the bytes from this `AsyncRead`.
