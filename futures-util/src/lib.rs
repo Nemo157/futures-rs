@@ -52,8 +52,6 @@ pub mod future;
 pub use future::FutureExt;
 
 pub mod io;
-pub use io::{CoreAsyncReadExt, CoreAsyncWriteExt};
-#[cfg(feature = "std")]
 pub use io::{AsyncReadExt, AsyncWriteExt};
 
 pub mod stream;
@@ -66,7 +64,5 @@ pub mod prelude {
     //! Prelude containing the extension traits, which add functionality to
     //! existing asynchronous types.
     pub use {FutureExt, StreamExt, SinkExt};
-    pub use {CoreAsyncReadExt, CoreAsyncWriteExt};
-    #[cfg(feature = "std")]
     pub use {AsyncReadExt, AsyncWriteExt};
 }

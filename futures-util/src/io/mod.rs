@@ -30,8 +30,41 @@ mod close;
 mod window;
 mod write_all;
 
+if_std! {
+    use std::vec::Vec;
+    use std::boxed::Box;
+
+    pub use futures_io::{AsyncRead, AsyncWrite};
+
+    pub use self::allow_std::AllowStdIo;
+    pub use self::read_to_end::ReadToEnd;
+    pub use self::split::{ReadHalf, WriteHalf};
+
+    mod allow_std;
+    mod read_to_end;
+    mod split;
+}
+
 /// An extension trait which adds utility methods to `CoreAsyncRead` types.
-pub trait CoreAsyncReadExt: CoreAsyncRead {
+pub trait AsyncReadExt: CoreAsyncRead {
+    /// Creates a future which copies all the bytes from one object to another.
+    ///
+    /// The returned future will copy all the bytes read from this `AsyncRead` into the
+    /// `writer` specified. This future will only complete once the `reader` has hit
+    /// EOF and all bytes have been written to and flushed from the `writer`
+    /// provided.
+    ///
+    /// On success the number of bytes is returned and this `AsyncRead` and `writer` are
+    /// consumed. On error the error is returned and the I/O objects are consumed as
+    /// well.
+    #[cfg(feature = "std")]
+    fn copy_into<W>(self, writer: W) -> CopyInto<Self, W, Box<[u8]>>
+        where W: CoreAsyncWrite<Error = Self::Error>,
+              Self: Sized,
+    {
+        self.copy_into_with_buffer(writer, Box::new([0; 2048]))
+    }
+
     /// Creates a future which copies all the bytes from one object to another.
     ///
     /// The returned future will copy all the bytes read from this `AsyncRead` into the
@@ -62,7 +95,6 @@ pub trait CoreAsyncReadExt: CoreAsyncRead {
         read::read(self, buf)
     }
 
-
     /// Creates a future which will read exactly enough bytes to fill `buf`,
     /// returning an error if EOF is hit sooner.
     ///
@@ -79,12 +111,36 @@ pub trait CoreAsyncReadExt: CoreAsyncRead {
     {
         read_exact::read_exact(self, buf)
     }
+
+    /// Creates a future which will read all the bytes from this `AsyncRead`.
+    ///
+    /// In the case of an error the buffer and the object will be discarded, with
+    /// the error yielded. In the case of success the object will be destroyed and
+    /// the buffer will be returned, with all data read from the stream appended to
+    /// the buffer.
+    #[cfg(feature = "std")]
+    fn read_to_end(self, buf: Vec<u8>) -> ReadToEnd<Self>
+        where Self: Sized + AsyncRead,
+    {
+        read_to_end::read_to_end(self, buf)
+    }
+
+    /// Helper method for splitting this read/write object into two halves.
+    ///
+    /// The two halves returned implement the `Read` and `Write` traits,
+    /// respectively.
+    #[cfg(feature = "std")]
+    fn split(self) -> (ReadHalf<Self>, WriteHalf<Self>)
+        where Self: CoreAsyncWrite + Sized,
+    {
+        split::split(self)
+    }
 }
 
-impl<T: CoreAsyncRead + ?Sized> CoreAsyncReadExt for T {}
+impl<T: CoreAsyncRead + ?Sized> AsyncReadExt for T {}
 
 /// An extension trait which adds utility methods to `CoreAsyncWrite` types.
-pub trait CoreAsyncWriteExt: CoreAsyncWrite {
+pub trait AsyncWriteExt: CoreAsyncWrite {
     /// Creates a future which will entirely flush this `CoreAsyncWrite` and then return `self`.
     ///
     /// This function will consume `self` if an error occurs.
@@ -126,69 +182,4 @@ pub trait CoreAsyncWriteExt: CoreAsyncWrite {
     }
 }
 
-impl<T: CoreAsyncWrite + ?Sized> CoreAsyncWriteExt for T {}
-
-if_std! {
-    use std::vec::Vec;
-    use std::boxed::Box;
-
-    pub use futures_io::{AsyncRead, AsyncWrite};
-
-    pub use self::allow_std::AllowStdIo;
-    pub use self::read_to_end::ReadToEnd;
-    pub use self::split::{ReadHalf, WriteHalf};
-
-    mod allow_std;
-    mod read_to_end;
-    mod split;
-
-    /// An extension trait which adds utility methods to `AsyncRead` types.
-    pub trait AsyncReadExt: AsyncRead + CoreAsyncReadExt {
-        /// Creates a future which copies all the bytes from one object to another.
-        ///
-        /// The returned future will copy all the bytes read from this `AsyncRead` into the
-        /// `writer` specified. This future will only complete once the `reader` has hit
-        /// EOF and all bytes have been written to and flushed from the `writer`
-        /// provided.
-        ///
-        /// On success the number of bytes is returned and this `AsyncRead` and `writer` are
-        /// consumed. On error the error is returned and the I/O objects are consumed as
-        /// well.
-        fn copy_into<W>(self, writer: W) -> CopyInto<Self, W, Box<[u8]>>
-            where W: CoreAsyncWrite<Error = Self::Error>,
-                  Self: Sized,
-        {
-            self.copy_into_with_buffer(writer, Box::new([0; 2048]))
-        }
-
-        /// Creates a future which will read all the bytes from this `AsyncRead`.
-        ///
-        /// In the case of an error the buffer and the object will be discarded, with
-        /// the error yielded. In the case of success the object will be destroyed and
-        /// the buffer will be returned, with all data read from the stream appended to
-        /// the buffer.
-        fn read_to_end(self, buf: Vec<u8>) -> ReadToEnd<Self>
-            where Self: Sized,
-        {
-            read_to_end::read_to_end(self, buf)
-        }
-
-        /// Helper method for splitting this read/write object into two halves.
-        ///
-        /// The two halves returned implement the `Read` and `Write` traits,
-        /// respectively.
-        fn split(self) -> (ReadHalf<Self>, WriteHalf<Self>)
-            where Self: AsyncWrite + Sized,
-        {
-            split::split(self)
-        }
-    }
-
-    impl<T: AsyncRead + CoreAsyncReadExt + ?Sized> AsyncReadExt for T {}
-
-    /// An extension trait which adds utility methods to `AsyncWrite` types.
-    pub trait AsyncWriteExt: AsyncWrite + CoreAsyncWriteExt {
-    }
-
-    impl<T: AsyncWrite + CoreAsyncWriteExt + ?Sized> AsyncWriteExt for T {}
-}
+impl<T: CoreAsyncWrite + ?Sized> AsyncWriteExt for T {}

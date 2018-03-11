@@ -217,7 +217,7 @@ pub mod io {
         Initializer, IoVec, IoVecMut, CoreIoError, CoreAsyncRead, CoreAsyncWrite,
     };
     pub use futures_util::io::{
-        CoreAsyncReadExt, CoreAsyncWriteExt, Close, CopyInto, Flush,
+        AsyncReadExt, AsyncWriteExt, Close, CopyInto, Flush,
         Read, ReadExact, Window, WriteAll,
     };
 
@@ -227,7 +227,7 @@ pub mod io {
     };
     #[cfg(feature = "std")]
     pub use futures_util::io::{
-        AsyncReadExt, AsyncWriteExt, AllowStdIo, ReadHalf, ReadToEnd, WriteHalf,
+        AllowStdIo, ReadHalf, ReadToEnd, WriteHalf,
     };
 }
 
