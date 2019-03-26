@@ -1,6 +1,7 @@
 use std::cell::UnsafeCell;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
+use std::panic::{UnwindSafe, RefUnwindSafe};
 
 /// A "lock" around data `D`, which employs a *helping* strategy.
 ///
@@ -24,6 +25,8 @@ pub(crate) struct UnparkMutex<D> {
 // must therefore be `Send`.
 unsafe impl<D: Send> Send for UnparkMutex<D> {}
 unsafe impl<D: Send> Sync for UnparkMutex<D> {}
+impl<D> UnwindSafe for UnparkMutex<D> {}
+impl<D> RefUnwindSafe for UnparkMutex<D> {}
 
 // There are four possible task states, listed below with their possible
 // transitions:

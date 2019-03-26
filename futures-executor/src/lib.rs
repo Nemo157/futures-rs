@@ -1,6 +1,7 @@
 //! Built-in executors and related tools.
 
 #![feature(futures_api)]
+#![cfg_attr(test, feature(async_await))]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

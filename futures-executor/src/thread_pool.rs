@@ -12,6 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
 use std::thread;
 use std::fmt;
+use std::panic;
+use std::any::Any;
 
 /// A general-purpose thread pool for scheduling tasks that poll futures to
 /// completion.
@@ -32,6 +34,7 @@ pub struct ThreadPoolBuilder {
     name_prefix: Option<String>,
     after_start: Option<Arc<dyn Fn(usize) + Send + Sync>>,
     before_stop: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+    panic_hook: Option<Arc<dyn Fn(Box<dyn Any + Send + 'static>) + Send + Sync>>,
 }
 
 trait AssertSendSync: Send + Sync {}
@@ -134,7 +137,9 @@ impl PoolState {
     fn work(&self,
             idx: usize,
             after_start: Option<Arc<dyn Fn(usize) + Send + Sync>>,
-            before_stop: Option<Arc<dyn Fn(usize) + Send + Sync>>) {
+            before_stop: Option<Arc<dyn Fn(usize) + Send + Sync>>,
+            panic_hook: Option<Arc<dyn Fn(Box<dyn Any + Send + 'static>) + Send + Sync>>)
+    {
         let _scope = enter().unwrap();
         if let Some(after_start) = after_start {
             after_start(idx);
@@ -142,7 +147,16 @@ impl PoolState {
         loop {
             let msg = self.rx.lock().unwrap().recv().unwrap();
             match msg {
-                Message::Run(task) => task.run(),
+                Message::Run(task) => {
+                    match panic::catch_unwind(move || task.run()) {
+                        Ok(()) => (),
+                        Err(err) => {
+                            if let Some(ref panic_hook) = panic_hook {
+                                panic_hook(err);
+                            }
+                        }
+                    }
+                }
                 Message::Close => break,
             }
         }
@@ -180,6 +194,7 @@ impl ThreadPoolBuilder {
             name_prefix: None,
             after_start: None,
             before_stop: None,
+            panic_hook: None,
         }
     }
 
@@ -242,6 +257,14 @@ impl ThreadPoolBuilder {
         self
     }
 
+    /// Execute closure `f` when any future panics while running on this thread pool.
+    pub fn panic_hook<F>(&mut self, f: F) -> &mut Self
+        where F: Fn(Box<dyn Any + Send + 'static>) + Send + Sync + 'static
+    {
+        self.panic_hook = Some(Arc::new(f));
+        self
+    }
+
     /// Create a [`ThreadPool`](ThreadPool) with the given configuration.
     ///
     /// # Panics
@@ -263,6 +286,7 @@ impl ThreadPoolBuilder {
             let state = pool.state.clone();
             let after_start = self.after_start.clone();
             let before_stop = self.before_stop.clone();
+            let panic_hook = self.panic_hook.clone();
             let mut thread_builder = thread::Builder::new();
             if let Some(ref name_prefix) = self.name_prefix {
                 thread_builder = thread_builder.name(format!("{}{}", name_prefix, counter));
@@ -270,7 +294,7 @@ impl ThreadPoolBuilder {
             if self.stack_size > 0 {
                 thread_builder = thread_builder.stack_size(self.stack_size);
             }
-            thread_builder.spawn(move || state.work(counter, after_start, before_stop))?;
+            thread_builder.spawn(move || state.work(counter, after_start, before_stop, panic_hook))?;
         }
         Ok(pool)
     }
@@ -350,17 +374,42 @@ impl ArcWake for WakeHandle {
 mod tests {
     use super::*;
     use std::sync::mpsc;
+    use futures::task::SpawnExt;
 
     #[test]
     fn test_drop_after_start() {
         let (tx, rx) = mpsc::sync_channel(2);
         let _cpu_pool = ThreadPoolBuilder::new()
             .pool_size(2)
-            .after_start(move |_| tx.send(1).unwrap()).create().unwrap();
+            .after_start(move |_| tx.send(1).unwrap())
+            .create().unwrap();
 
         // After ThreadPoolBuilder is deconstructed, the tx should be droped
         // so that we can use rx as an iterator.
         let count = rx.into_iter().count();
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_panicking_doesnt_kill_threads() {
+        let (tx, rx) = mpsc::channel();
+        let mut pool = ThreadPoolBuilder::new()
+            .pool_size(1)
+            .create().unwrap();
+        pool.spawn(async { panic!() }).unwrap();
+        pool.spawn(async move { tx.send(2).unwrap(); }).unwrap();
+        assert_eq!(rx.recv().unwrap(), 2);
+    }
+
+    #[test]
+    fn test_panic_hook() {
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let mut pool = ThreadPoolBuilder::new()
+            .pool_size(1)
+            .panic_hook(move |err| tx.lock().unwrap().send(*err.downcast_ref::<&'static str>().unwrap()).unwrap())
+            .create().unwrap();
+        pool.spawn(async { panic!("hello") }).unwrap();
+        assert_eq!(rx.recv().unwrap(), "hello");
     }
 }
