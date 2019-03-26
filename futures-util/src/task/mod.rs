@@ -33,7 +33,7 @@ pub use self::noop_waker::noop_waker;
 pub use self::noop_waker::noop_waker_ref;
 
 mod spawn;
-pub use self::spawn::{SpawnExt, LocalSpawnExt};
+pub use self::spawn::*;
 
 // re-export for `select!`
 #[doc(hidden)]
