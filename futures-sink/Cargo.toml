@@ -1,3 +1,5 @@
+cargo-features = ["public-dependency"]
+
 [package]
 name = "futures-sink-preview"
 edition = "2018"
@@ -22,4 +24,4 @@ alloc = ["futures-core-preview/alloc"]
 
 [dependencies]
 futures-core-preview = { path = "../futures-core", version = "=0.3.0-alpha.16", default-features = false }
-futures-channel-preview = { path = "../futures-channel", version = "=0.3.0-alpha.16", default-features = false }
+futures-channel-preview = { path = "../futures-channel", version = "=0.3.0-alpha.16", default-features = false, public = true }
