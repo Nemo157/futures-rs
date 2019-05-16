@@ -10,6 +10,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#![feature(specialization)]
+
 #![warn(missing_docs, missing_debug_implementations, rust_2018_idioms)]
 #![warn(clippy::all)]
 
@@ -505,7 +507,7 @@ mod if_std {
     }
 
     impl<T: AsMut<[u8]> + Unpin> AsyncWrite for StdIo::Cursor<T> {
-        fn poll_write(
+        default fn poll_write(
             mut self: Pin<&mut Self>,
             _: &mut Context<'_>,
             buf: &[u8],
@@ -534,6 +536,26 @@ mod if_std {
 
         fn poll_close(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<()>> {
             self.poll_flush(cx)
+        }
+    }
+
+    impl AsyncWrite for StdIo::Cursor<&mut Vec<u8>> {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize>> {
+            Poll::Ready(StdIo::Write::write(self.get_mut(), buf))
+        }
+    }
+
+    impl AsyncWrite for StdIo::Cursor<Vec<u8>> {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize>> {
+            Poll::Ready(StdIo::Write::write(self.get_mut(), buf))
         }
     }
 

@@ -222,9 +222,7 @@ impl AsyncSeek for MaybePendingSeek {
 
 #[test]
 fn maybe_pending_buf_writer_seek() {
-    // FIXME: when https://github.com/rust-lang-nursery/futures-rs/issues/1510 fixed,
-    // use `Vec::new` instead of `vec![0; 8]`.
-    let mut w = BufWriter::with_capacity(3, MaybePendingSeek::new(vec![0; 8]));
+    let mut w = BufWriter::with_capacity(3, MaybePendingSeek::new(Vec::new()));
     run(w.write_all(&[0, 1, 2, 3, 4, 5])).unwrap();
     run(w.write_all(&[6, 7])).unwrap();
     assert_eq!(run(w.seek(SeekFrom::Current(0))).ok(), Some(8));
