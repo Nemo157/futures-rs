@@ -176,6 +176,9 @@ pub fn select(input: TokenStream) -> TokenStream {
                 _ => {
                     future_let_bindings.push(quote! {
                         let mut #variant_name = #expr;
+                        let mut #variant_name = unsafe {
+                            #futures_crate::core_reexport::pin::Pin::new_unchecked(&mut #variant_name)
+                        };
                     });
                     parse_quote! { #variant_name }
                 }

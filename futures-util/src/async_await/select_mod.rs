@@ -45,6 +45,22 @@ macro_rules! document_select_macro {
         /// ```
         /// #![feature(async_await)]
         /// # futures::executor::block_on(async {
+        /// use futures::future::{self, FutureExt};
+        /// use futures::select;
+        /// let a = async { 4 }.fuse();
+        /// let mut b = future::pending::<()>();
+        ///
+        /// let res = select! {
+        ///     a_res = { a } => a_res + 1,
+        ///     _ = b => 0,
+        /// };
+        /// assert_eq!(res, 5);
+        /// # });
+        /// ```
+        ///
+        /// ```
+        /// #![feature(async_await)]
+        /// # futures::executor::block_on(async {
         /// use futures::future;
         /// use futures::stream::{self, StreamExt};
         /// use futures::select;
