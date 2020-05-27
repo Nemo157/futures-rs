@@ -383,6 +383,12 @@ mod if_std {
             self.get_mut().as_mut().poll_read(cx, buf)
         }
 
+        fn poll_read_buf(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>)
+            -> Poll<Result<()>>
+        {
+            self.get_mut().as_mut().poll_read_buf(cx, buf)
+        }
+
         fn poll_read_vectored(self: Pin<&mut Self>, cx: &mut Context<'_>, bufs: &mut [IoSliceMut<'_>])
             -> Poll<Result<usize>>
         {
