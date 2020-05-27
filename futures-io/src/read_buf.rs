@@ -44,6 +44,12 @@ impl<'a> ReadBuf<'a> {
         self.buf.len()
     }
 
+    /// Returns whether this buffer is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.buf.is_empty()
+    }
+
     /// Returns a shared reference to the filled portion of the buffer.
     #[inline]
     pub fn filled(&self) -> &[u8] {
