@@ -51,24 +51,29 @@ pub(super) fn read_to_end_internal<R: AsyncRead + ?Sized>(
             buf.reserve(32);
         }
 
-        // Pointer to start of spare capacity
-        let ptr = unsafe { buf.as_mut_ptr().add(buf.len()).cast::<MaybeUninit<u8>>() };
-        let slice = unsafe { std::slice::from_raw_parts_mut(ptr, buf.capacity() - buf.len()) };
-        let mut read_buf = ReadBuf::uninit(slice);
+        let read_len = {
+            let spare_len = buf.capacity() - buf.len();
+            assert!(spare_len > 0);
+            let spare_ptr = unsafe { buf.as_mut_ptr().add(buf.len()).cast::<MaybeUninit<u8>>() };
+            let spare_slice = unsafe { std::slice::from_raw_parts_mut(spare_ptr, spare_len) };
+            let mut read_buf = ReadBuf::uninit(spare_slice);
+            unsafe {
+                read_buf.assume_init(*initialized);
+            }
+
+            ready!(rd.as_mut().poll_read_buf(cx, &mut read_buf))?;
+
+            *initialized = read_buf.initialized().len() - read_buf.filled().len();
+
+            if read_buf.filled().is_empty() {
+                break;
+            }
+
+            read_buf.filled().len()
+        };
+
         unsafe {
-            read_buf.assume_init(*initialized);
-        }
-
-        ready!(rd.as_mut().poll_read_buf(cx, &mut read_buf))?;
-
-        if read_buf.filled().is_empty() {
-            break;
-        }
-
-        *initialized = read_buf.initialized().len() - read_buf.filled().len();
-        let new_len = buf.len() + read_buf.filled().len();
-        unsafe {
-            buf.set_len(new_len);
+            buf.set_len(buf.len() + read_len);
         }
     }
 
