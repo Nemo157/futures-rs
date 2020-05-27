@@ -61,14 +61,15 @@ pub(super) fn read_to_end_internal<R: AsyncRead + ?Sized>(
                 read_buf.assume_init(*initialized);
             }
 
+            dbg!(&read_buf);
             ready!(rd.as_mut().poll_read_buf(cx, &mut read_buf))?;
-
-            *initialized = read_buf.initialized().len() - read_buf.filled().len();
+            dbg!(&read_buf);
 
             if read_buf.filled().is_empty() {
                 break;
             }
 
+            *initialized = read_buf.initialized().len() - read_buf.filled().len();
             read_buf.filled().len()
         };
 
