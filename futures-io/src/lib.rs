@@ -21,8 +21,13 @@
 
 #![doc(html_root_url = "https://docs.rs/futures-io/0.3.5")]
 
+#![feature(maybe_uninit_slice_assume_init, maybe_uninit_slice)]
+
 #[cfg(all(feature = "read-initializer", not(feature = "unstable")))]
 compile_error!("The `read-initializer` feature requires the `unstable` feature as an explicit opt-in to unstable features");
+
+mod read_buf;
+pub use read_buf::ReadBuf;
 
 #[cfg(feature = "std")]
 mod if_std {
@@ -46,6 +51,9 @@ mod if_std {
     #[cfg(feature = "read-initializer")]
     #[allow(unreachable_pub)] // https://github.com/rust-lang/rust/issues/57411
     pub use io::Initializer as Initializer;
+
+    use crate::ReadBuf;
+    use futures_core::ready;
 
     /// Read bytes asynchronously.
     ///
@@ -92,6 +100,18 @@ mod if_std {
         /// `Interrupted` into another error kind.
         fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut [u8])
             -> Poll<Result<usize>>;
+
+        /// Pull some bytes from this source into the specified buffer.
+        ///
+        /// This is equivalent to the `read` method, except that it is passed a `ReadBuf` rather than `[u8]` to allow use
+        /// with uninitialized buffers.
+        ///
+        /// The default implementation delegates to `read`.
+        fn poll_read_buf(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>) -> Poll<Result<()>> {
+            let n = ready!(self.poll_read(cx, buf.initialize_unfilled()))?;
+            buf.add_filled(n);
+            Poll::Ready(Ok(()))
+        }
 
         /// Attempt to read from the `AsyncRead` into `bufs` using vectored
         /// IO operations.
