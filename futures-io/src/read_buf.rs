@@ -166,6 +166,7 @@ impl<'a> ReadBuf<'a> {
     /// The caller must ensure that `n` unfilled bytes of the buffer have already been initialized.
     #[inline]
     pub unsafe fn assume_init(&mut self, n: usize) {
+        let n = self.filled.checked_add(n).unwrap();
         self.initialized = std::cmp::max(self.initialized, n);
     }
 
