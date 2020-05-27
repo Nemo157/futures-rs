@@ -6,11 +6,21 @@ use std::mem::MaybeUninit;
 /// buffer that has been logically filled with data, a region that has been initialized at some point but not yet
 /// logically filled, and a region at the end that is fully uninitialized. The filled region is guaranteed to be a
 /// subset of the initialized region.
-#[derive(Debug)]
 pub struct ReadBuf<'a> {
     buf: &'a mut [MaybeUninit<u8>],
     filled: usize,
     initialized: usize,
+}
+
+impl std::fmt::Debug for ReadBuf<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReadBuf")
+            .field("buf", &format_args!("[MaybeUninit<u8>; {}]", self.buf.len()))
+            .field("filled", &self.filled)
+            .field("initialized", &self.initialized)
+            .field("filled buf", &self.filled())
+            .finish()
+    }
 }
 
 impl<'a> ReadBuf<'a> {
