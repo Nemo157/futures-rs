@@ -14,6 +14,7 @@ pub struct ReadToString<'a, R: ?Sized> {
     buf: &'a mut String,
     bytes: Vec<u8>,
     start_len: usize,
+    initialized: usize,
 }
 
 impl<R: ?Sized + Unpin> Unpin for ReadToString<'_, R> {}
@@ -26,6 +27,7 @@ impl<'a, R: AsyncRead + ?Sized + Unpin> ReadToString<'a, R> {
             bytes: mem::replace(buf, String::new()).into_bytes(),
             buf,
             start_len,
+            initialized: 0,
         }
     }
 }
@@ -36,8 +38,9 @@ fn read_to_string_internal<R: AsyncRead + ?Sized>(
     buf: &mut String,
     bytes: &mut Vec<u8>,
     start_len: usize,
+    initialized: &mut usize,
 ) -> Poll<io::Result<usize>> {
-    let ret = ready!(read_to_end_internal(reader, cx, bytes, start_len));
+    let ret = ready!(read_to_end_internal(reader, cx, bytes, start_len, initialized));
     if str::from_utf8(&bytes).is_err() {
         Poll::Ready(ret.and_then(|_| {
             Err(io::Error::new(
@@ -60,7 +63,7 @@ where
     type Output = io::Result<usize>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let Self { reader, buf, bytes, start_len } = &mut *self;
-        read_to_string_internal(Pin::new(reader), cx, buf, bytes, *start_len)
+        let Self { reader, buf, bytes, start_len, initialized } = &mut *self;
+        read_to_string_internal(Pin::new(reader), cx, buf, bytes, *start_len, initialized)
     }
 }

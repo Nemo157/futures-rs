@@ -1,9 +1,10 @@
 use futures_core::future::Future;
 use futures_core::task::{Context, Poll};
-use futures_io::AsyncRead;
+use futures_io::{AsyncRead, ReadBuf};
 use std::io;
 use std::pin::Pin;
 use std::vec::Vec;
+use std::mem::MaybeUninit;
 
 /// Future for the [`read_to_end`](super::AsyncReadExt::read_to_end) method.
 #[derive(Debug)]
@@ -12,6 +13,7 @@ pub struct ReadToEnd<'a, R: ?Sized> {
     reader: &'a mut R,
     buf: &'a mut Vec<u8>,
     start_len: usize,
+    initialized: usize,
 }
 
 impl<R: ?Sized + Unpin> Unpin for ReadToEnd<'_, R> {}
@@ -23,15 +25,8 @@ impl<'a, R: AsyncRead + ?Sized + Unpin> ReadToEnd<'a, R> {
             reader,
             buf,
             start_len,
+            initialized: 0,
         }
-    }
-}
-
-struct Guard<'a> { buf: &'a mut Vec<u8>, len: usize }
-
-impl Drop for Guard<'_> {
-    fn drop(&mut self) {
-        unsafe { self.buf.set_len(self.len); }
     }
 }
 
@@ -49,33 +44,35 @@ pub(super) fn read_to_end_internal<R: AsyncRead + ?Sized>(
     cx: &mut Context<'_>,
     buf: &mut Vec<u8>,
     start_len: usize,
+    initialized: &mut usize,
 ) -> Poll<io::Result<usize>> {
-    let mut g = Guard { len: buf.len(), buf };
-    let ret;
     loop {
-        if g.len == g.buf.len() {
-            unsafe {
-                g.buf.reserve(32);
-                let capacity = g.buf.capacity();
-                g.buf.set_len(capacity);
-                super::initialize(&rd, &mut g.buf[g.len..]);
-            }
+        if buf.capacity() == buf.len() {
+            buf.reserve(32);
         }
 
-        match ready!(rd.as_mut().poll_read(cx, &mut g.buf[g.len..])) {
-            Ok(0) => {
-                ret = Poll::Ready(Ok(g.len - start_len));
-                break;
-            }
-            Ok(n) => g.len += n,
-            Err(e) => {
-                ret = Poll::Ready(Err(e));
-                break;
-            }
+        // Pointer to start of spare capacity
+        let ptr = unsafe { buf.as_mut_ptr().add(buf.len()).cast::<MaybeUninit<u8>>() };
+        let slice = unsafe { std::slice::from_raw_parts_mut(ptr, buf.capacity() - buf.len()) };
+        let mut read_buf = ReadBuf::uninit(slice);
+        unsafe {
+            read_buf.assume_init(*initialized);
+        }
+
+        ready!(rd.as_mut().poll_read_buf(cx, &mut read_buf))?;
+
+        if read_buf.filled().is_empty() {
+            break;
+        }
+
+        *initialized = read_buf.initialized().len() - read_buf.filled().len();
+        let new_len = buf.len() + read_buf.filled().len();
+        unsafe {
+            buf.set_len(new_len);
         }
     }
 
-    ret
+    Poll::Ready(Ok(buf.len() - start_len))
 }
 
 impl<A> Future for ReadToEnd<'_, A>
@@ -85,6 +82,6 @@ impl<A> Future for ReadToEnd<'_, A>
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = &mut *self;
-        read_to_end_internal(Pin::new(&mut this.reader), cx, this.buf, this.start_len)
+        read_to_end_internal(Pin::new(&mut this.reader), cx, this.buf, this.start_len, &mut this.initialized)
     }
 }
