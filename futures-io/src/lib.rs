@@ -351,6 +351,12 @@ mod if_std {
                 Pin::new(&mut **self).poll_read(cx, buf)
             }
 
+            fn poll_read_buf(mut self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut ReadBuf<'_>)
+                -> Poll<Result<()>>
+            {
+                Pin::new(&mut **self).poll_read_buf(cx, buf)
+            }
+
             fn poll_read_vectored(mut self: Pin<&mut Self>, cx: &mut Context<'_>, bufs: &mut [IoSliceMut<'_>])
                 -> Poll<Result<usize>>
             {
