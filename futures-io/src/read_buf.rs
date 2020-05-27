@@ -95,7 +95,7 @@ impl<'a> ReadBuf<'a> {
     /// the first use.
     #[inline]
     pub fn initialize_unfilled(&mut self) -> &mut [u8] {
-        self.initialize_unfilled_to(self.len())
+        self.initialize_unfilled_to(self.len() - self.initialized)
     }
 
     /// Returns a mutable reference to the first `n` bytes of the unfilled part of the buffer, ensuring it is
@@ -106,10 +106,14 @@ impl<'a> ReadBuf<'a> {
     /// Panics if `self.remaining()` is less than `n`.
     #[inline]
     pub fn initialize_unfilled_to(&mut self, n: usize) -> &mut [u8] {
+        let end = self.filled.checked_add(n).unwrap();
         unsafe {
-            let dst = &mut self.buf[self.initialized..n];
-            std::ptr::write_bytes(MaybeUninit::first_ptr_mut(dst), 0, n - self.initialized);
-            MaybeUninit::slice_get_mut(dst)
+            if self.initialized < end {
+                let uninit = &mut self.buf[self.initialized..end];
+                std::ptr::write_bytes(MaybeUninit::first_ptr_mut(uninit), 0, uninit.len());
+                self.initialized = end;
+            }
+            MaybeUninit::slice_get_mut(&mut self.buf[self.filled..end])
         }
     }
 
